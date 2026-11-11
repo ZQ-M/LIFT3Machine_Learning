@@ -1,0 +1,10 @@
+__pycache__/
+*.log
+# earlier training runs are kept on this computer only
+rl/runs/v[1-9]/
+rl/runs/v1[0-2]/
+# training checkpoints are large; keep only the final policy of the current run
+rl/runs/**/*.pt
+!rl/runs/v13/model_final.pt
+# posture pools are regenerated automatically by rl/lift3_vec.py (build_pool)
+rl/config_pool*.npz

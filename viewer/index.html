@@ -1,0 +1,1190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LIFT3 URDF Viewer</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f25; --line: #2c313a; --text: #e6e8ec;
+    --muted: #8b93a1; --accent: #4da3ff; --warn: #f0b343;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans", "Noto Sans CJK SC", "Noto Sans CJK JP", "Microsoft YaHei", "Yu Gothic", sans-serif; }
+  #app { display: flex; height: 100%; }
+  #panel { width: 340px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
+    overflow-y: auto; padding: 14px 14px 30px; }
+  #view { flex: 1; position: relative; min-width: 0; }
+  canvas { display: block; }
+  h1 { font-size: 16px; margin: 0 0 2px; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  select { background: #262b34; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
+  .sub { color: var(--muted); margin-bottom: 10px; }
+  #status { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; }
+  #status.warn { border-color: var(--warn); color: var(--warn); }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  button { background: #262b34; color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 10px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #06121f; border-color: var(--accent); }
+  label.chk { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; color: var(--muted); }
+  details { border-top: 1px solid var(--line); padding: 8px 0 2px; }
+  summary { cursor: pointer; font-weight: 600; margin-bottom: 6px; }
+  .row { display: grid; grid-template-columns: 104px 1fr 62px; align-items: center; gap: 6px; margin: 3px 0; }
+  .row { border-radius: 4px; padding: 0 4px; margin-left: -4px; margin-right: -4px; cursor: pointer; }
+  .row.hot { background: rgba(77,163,255,.12); }
+  .row.sel { background: rgba(255,167,51,.18); outline: 1px solid #ffa733; }
+  .row.sel .name { color: #ffa733; }
+  .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  #hud { position: absolute; left: 12px; bottom: 12px; background: rgba(20,22,26,.8); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 10px; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre; pointer-events: none; }
+  #help { position: absolute; right: 12px; top: 12px; color: var(--muted); text-align: right; pointer-events: none; }
+  kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; background: #262b34; color: var(--text); }
+  @media (max-width: 760px) { #app { flex-direction: column-reverse; } #panel { width: 100%; height: 45%; border-right: 0; border-top: 1px solid var(--line); } #help { display: none; } }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="panel">
+    <div class="head"><h1>LIFT3</h1>
+      <select id="lang" aria-label="Language">
+        <option value="en">English</option><option value="zh">中文</option><option value="ja">日本語</option><option value="ru">Русский</option>
+      </select></div>
+    <div class="sub" data-i18n="subtitle"></div>
+    <div id="status"></div>
+    <div class="btns">
+      <button id="bReset" data-i18n="reset"></button>
+      <button id="bRandom" data-i18n="random"></button>
+      <button id="bAnim" data-i18n="anim"></button>
+    </div>
+    <div style="margin-bottom:8px">
+      <label class="chk"><input type="checkbox" id="cFrames" checked> <span data-i18n="frames"></span></label>
+      <label class="chk"><input type="checkbox" id="cAxes"> <span data-i18n="axes"></span></label>
+      <label class="chk"><input type="checkbox" id="cCouple" checked> <span data-i18n="couple"></span></label>
+      <label class="chk"><input type="checkbox" id="cHiQ" checked> <span data-i18n="hiq"></span></label>
+    </div>
+    <div id="groups"></div>
+  </div>
+  <div id="view">
+    <div id="help"></div>
+    <div id="hud"></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/OrbitControls.js';
+import { STLLoader } from 'three/addons/STLLoader.js';
+import { TransformControls } from 'three/addons/TransformControls.js';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+
+// ---------- languages ----------
+const I18N = {
+ "en": {
+  "subtitle": "Mobile base · lift · dual 6-DoF arms · parallel grippers",
+  "loading": "Loading URDF…",
+  "reset": "Reset",
+  "random": "Random pose",
+  "anim": "Animate all",
+  "frames": "gripper frames",
+  "axes": "joint axes",
+  "couple": "couple fingers",
+  "hiq": "high quality",
+  "g_targets": "Target frames — drag in 3D",
+  "t_left": "L target",
+  "t_right": "R target",
+  "move": "Move (T)",
+  "rotate": "Rotate (G)",
+  "axes_world": "axes: world",
+  "axes_local": "axes: local",
+  "snap": "Snap to grippers",
+  "rand_t": "Random",
+  "reset_t": "Reset targets",
+  "g_chassis": "Chassis — driven by the 4 omni wheels",
+  "chassis_note": "Set wheel speed commands; the chassis x / y / yaw follow from wheel traction (see readout).",
+  "stop_wheels": "Stop wheels",
+  "reset_chassis": "Reset chassis",
+  "g_lift": "Lift platform",
+  "g_larm": "Left arm (6 DoF)",
+  "g_lgrip": "Left gripper",
+  "g_rarm": "Right arm (6 DoF)",
+  "g_rgrip": "Right gripper",
+  "g_other": "Other joints",
+  "g_replay": "Trained policy — replay",
+  "pause": "Pause",
+  "play": "Play",
+  "exit_replay": "Exit replay",
+  "success": "success",
+  "not_reached": "not reached",
+  "replay_info": "{0} · error L {1} mm / {2}°, R {3} mm / {4}° · peak arm torque {5}% of limit",
+  "st_ok": "Meshes {0}/{1} loaded. {2} links · {3} movable joints · wheel radius ≈ {4} mm",
+  "st_missing": "Meshes {0}/{1} found in {5}meshes/ — showing placeholder shapes built from joint origins and inertias. {2} links · {3} movable joints · wheel radius ≈ {4} mm",
+  "st_fail": "Failed to load the URDF — run `python3 -m http.server` in the folder that contains viewer/ and open /viewer/. {0}",
+  "help": "drag: orbit · right-drag: pan · wheel: zoom<br>drive chassis: <kbd>W</kbd><kbd>S</kbd> fwd/back · <kbd>A</kbd><kbd>D</kbd> strafe · <kbd>Q</kbd><kbd>E</kbd> turn<br>lift: <kbd>R</kbd> up · <kbd>F</kbd> down<br>targets: click ball or <kbd>1</kbd><kbd>2</kbd> select · <kbd>T</kbd> move · <kbd>G</kbd> rotate · <kbd>X</kbd> world/local · <kbd>Esc</kbd> deselect<br>joints: hover a slider or click a link to highlight it"
+ },
+ "zh": {
+  "subtitle": "移动底盘 · 升降平台 · 双六自由度机械臂 · 平行夹爪",
+  "loading": "正在加载 URDF…",
+  "reset": "复位",
+  "random": "随机姿态",
+  "anim": "全部关节动画",
+  "frames": "夹爪坐标系",
+  "axes": "关节轴",
+  "couple": "手指联动",
+  "hiq": "高画质",
+  "g_targets": "目标坐标系 — 在三维视图中拖动",
+  "t_left": "左目标",
+  "t_right": "右目标",
+  "move": "移动 (T)",
+  "rotate": "旋转 (G)",
+  "axes_world": "坐标轴：世界",
+  "axes_local": "坐标轴：自身",
+  "snap": "对齐到夹爪",
+  "rand_t": "随机",
+  "reset_t": "复位目标",
+  "g_chassis": "底盘 — 由四个全向轮驱动",
+  "chassis_note": "设定各车轮的转速指令；底盘的 x / y / 偏航角由车轮牵引力计算得出（见下方读数）。",
+  "stop_wheels": "停止车轮",
+  "reset_chassis": "复位底盘",
+  "g_lift": "升降平台",
+  "g_larm": "左臂（6 自由度）",
+  "g_lgrip": "左夹爪",
+  "g_rarm": "右臂（6 自由度）",
+  "g_rgrip": "右夹爪",
+  "g_other": "其他关节",
+  "g_replay": "训练好的策略 — 回放",
+  "pause": "暂停",
+  "play": "播放",
+  "exit_replay": "退出回放",
+  "success": "成功",
+  "not_reached": "未到达",
+  "replay_info": "{0} · 误差 左 {1} mm / {2}°，右 {3} mm / {4}° · 机械臂峰值力矩为限值的 {5}%",
+  "st_ok": "已加载网格 {0}/{1}。{2} 个连杆 · {3} 个可动关节 · 车轮半径 ≈ {4} mm",
+  "st_missing": "在 {5}meshes/ 中找到网格 {0}/{1} — 以根据关节位置和惯量生成的占位形状显示。{2} 个连杆 · {3} 个可动关节 · 车轮半径 ≈ {4} mm",
+  "st_fail": "URDF 加载失败 — 请在包含 viewer/ 的文件夹中运行 `python3 -m http.server`，然后打开 /viewer/。{0}",
+  "help": "拖动：旋转视角 · 右键拖动：平移 · 滚轮：缩放<br>驾驶底盘： <kbd>W</kbd><kbd>S</kbd> 前进/后退 · <kbd>A</kbd><kbd>D</kbd> 横移 · <kbd>Q</kbd><kbd>E</kbd> 转向<br>升降： <kbd>R</kbd> 上升 · <kbd>F</kbd> 下降<br>目标：点击小球或按 <kbd>1</kbd><kbd>2</kbd> 选择 · <kbd>T</kbd> 移动 · <kbd>G</kbd> 旋转 · <kbd>X</kbd> 世界/自身坐标轴 · <kbd>Esc</kbd> 取消选择<br>关节：将鼠标悬停在滑块上，或点击连杆以高亮显示"
+ },
+ "ja": {
+  "subtitle": "移動台車 · 昇降リフト · 6自由度アーム×2 · 平行グリッパー",
+  "loading": "URDF を読み込み中…",
+  "reset": "リセット",
+  "random": "ランダム姿勢",
+  "anim": "全関節アニメーション",
+  "frames": "グリッパー座標系",
+  "axes": "関節軸",
+  "couple": "指を連動",
+  "hiq": "高画質",
+  "g_targets": "目標座標系 — 3D でドラッグ",
+  "t_left": "左ターゲット",
+  "t_right": "右ターゲット",
+  "move": "移動 (T)",
+  "rotate": "回転 (G)",
+  "axes_world": "軸：ワールド",
+  "axes_local": "軸：ローカル",
+  "snap": "グリッパーに合わせる",
+  "rand_t": "ランダム",
+  "reset_t": "ターゲットをリセット",
+  "g_chassis": "台車 — 4つのオムニホイールで駆動",
+  "chassis_note": "各ホイールの速度指令を設定します。台車の x / y / ヨー角はホイールの駆動力から計算されます（下の表示を参照）。",
+  "stop_wheels": "ホイール停止",
+  "reset_chassis": "台車をリセット",
+  "g_lift": "昇降プラットフォーム",
+  "g_larm": "左アーム（6自由度）",
+  "g_lgrip": "左グリッパー",
+  "g_rarm": "右アーム（6自由度）",
+  "g_rgrip": "右グリッパー",
+  "g_other": "その他の関節",
+  "g_replay": "学習済みポリシー — 再生",
+  "pause": "一時停止",
+  "play": "再生",
+  "exit_replay": "再生を終了",
+  "success": "成功",
+  "not_reached": "未到達",
+  "replay_info": "{0} · 誤差 左 {1} mm / {2}°、右 {3} mm / {4}° · アームのピークトルクは上限の {5}%",
+  "st_ok": "メッシュ {0}/{1} を読み込みました。リンク {2} 個 · 可動関節 {3} 個 · ホイール半径 ≈ {4} mm",
+  "st_missing": "{5}meshes/ にメッシュ {0}/{1} が見つかりました — 関節位置と慣性から作った仮の形状を表示しています。リンク {2} 個 · 可動関節 {3} 個 · ホイール半径 ≈ {4} mm",
+  "st_fail": "URDF の読み込みに失敗しました — viewer/ を含むフォルダーで `python3 -m http.server` を実行し、/viewer/ を開いてください。{0}",
+  "help": "ドラッグ：視点回転 · 右ドラッグ：平行移動 · ホイール：ズーム<br>台車の操作： <kbd>W</kbd><kbd>S</kbd> 前進/後退 · <kbd>A</kbd><kbd>D</kbd> 横移動 · <kbd>Q</kbd><kbd>E</kbd> 旋回<br>リフト： <kbd>R</kbd> 上昇 · <kbd>F</kbd> 下降<br>ターゲット：球をクリックまたは <kbd>1</kbd><kbd>2</kbd> 選択 · <kbd>T</kbd> 移動 · <kbd>G</kbd> 回転 · <kbd>X</kbd> ワールド/ローカル · <kbd>Esc</kbd> 選択解除<br>関節：スライダーにカーソルを置くか、リンクをクリックすると強調表示"
+ },
+ "ru": {
+  "subtitle": "Мобильная база · подъёмник · два 6-осевых манипулятора · параллельные захваты",
+  "loading": "Загрузка URDF…",
+  "reset": "Сброс",
+  "random": "Случайная поза",
+  "anim": "Анимация всех суставов",
+  "frames": "системы координат захватов",
+  "axes": "оси суставов",
+  "couple": "связать пальцы",
+  "hiq": "высокое качество",
+  "g_targets": "Целевые системы координат — перетаскивайте в 3D",
+  "t_left": "Левая цель",
+  "t_right": "Правая цель",
+  "move": "Перемещение (T)",
+  "rotate": "Вращение (G)",
+  "axes_world": "оси: мировые",
+  "axes_local": "оси: локальные",
+  "snap": "Привязать к захватам",
+  "rand_t": "Случайно",
+  "reset_t": "Сбросить цели",
+  "g_chassis": "Шасси — привод от 4 всенаправленных колёс",
+  "chassis_note": "Задайте скорости колёс; положение шасси x / y / рыскание вычисляется из тяги колёс (см. показания внизу).",
+  "stop_wheels": "Остановить колёса",
+  "reset_chassis": "Сбросить шасси",
+  "g_lift": "Подъёмная платформа",
+  "g_larm": "Левая рука (6 степеней свободы)",
+  "g_lgrip": "Левый захват",
+  "g_rarm": "Правая рука (6 степеней свободы)",
+  "g_rgrip": "Правый захват",
+  "g_other": "Прочие суставы",
+  "g_replay": "Обученная политика — воспроизведение",
+  "pause": "Пауза",
+  "play": "Воспроизвести",
+  "exit_replay": "Выйти из воспроизведения",
+  "success": "успех",
+  "not_reached": "цель не достигнута",
+  "replay_info": "{0} · ошибка: левая {1} мм / {2}°, правая {3} мм / {4}° · пиковый момент руки {5}% от предела",
+  "st_ok": "Загружено сеток: {0}/{1}. Звеньев: {2} · подвижных суставов: {3} · радиус колеса ≈ {4} мм",
+  "st_missing": "В {5}meshes/ найдено сеток: {0}/{1} — показаны упрощённые формы, построенные по положениям суставов и инерции. Звеньев: {2} · подвижных суставов: {3} · радиус колеса ≈ {4} мм",
+  "st_fail": "Не удалось загрузить URDF — запустите `python3 -m http.server` в папке, содержащей viewer/, и откройте /viewer/. {0}",
+  "help": "перетаскивание: вращение · правая кнопка: сдвиг · колесо: масштаб<br>управление шасси: <kbd>W</kbd><kbd>S</kbd> вперёд/назад · <kbd>A</kbd><kbd>D</kbd> вбок · <kbd>Q</kbd><kbd>E</kbd> поворот<br>подъёмник: <kbd>R</kbd> вверх · <kbd>F</kbd> вниз<br>цели: щёлкните по шару или <kbd>1</kbd><kbd>2</kbd> выбор · <kbd>T</kbd> перемещение · <kbd>G</kbd> вращение · <kbd>X</kbd> мировые/локальные оси · <kbd>Esc</kbd> снять выбор<br>суставы: наведите курсор на ползунок или щёлкните по звену, чтобы подсветить его"
+ }
+};
+for (const [l, d] of Object.entries({"en": {"g_live": "Live policy — real time", "live_start": "Start live policy", "live_stop": "Stop", "live_reset": "Reset robot", "live_off": "Live server is not running. Start rl/live_server.py and open this page from its address (port 43030).", "live_hint": "Drag the two target frames: the simulated robot follows them in real time.", "live_info": "checkpoint iteration {0} · error L {1} mm / {2}°, R {3} mm / {4}° · arm torque now {5}%, peak since last target change {6}% of limit{7}", "live_contact": " · CONTACT"}, "zh": {"g_live": "实时策略 — 实时运行", "live_start": "启动实时策略", "live_stop": "停止", "live_reset": "复位机器人", "live_off": "实时服务器未运行。请启动 rl/live_server.py，并通过其地址（端口 43030）打开本页面。", "live_hint": "拖动两个目标坐标系：仿真机器人会实时跟随。", "live_info": "模型迭代 {0} · 误差 左 {1} mm / {2}°，右 {3} mm / {4}° · 机械臂当前力矩 {5}%，自上次目标变化以来的峰值为限值的 {6}%{7}", "live_contact": " · 发生碰撞"}, "ja": {"g_live": "ライブポリシー — リアルタイム", "live_start": "ライブポリシーを開始", "live_stop": "停止", "live_reset": "ロボットをリセット", "live_off": "ライブサーバーが動作していません。rl/live_server.py を起動し、そのアドレス（ポート 43030）からこのページを開いてください。", "live_hint": "2つの目標座標系をドラッグすると、シミュレーション上のロボットがリアルタイムで追従します。", "live_info": "チェックポイント反復 {0} · 誤差 左 {1} mm / {2}°、右 {3} mm / {4}° · アームの現在トルク {5}%、目標変更後のピークは上限の {6}%{7}", "live_contact": " · 接触"}, "ru": {"g_live": "Политика в реальном времени", "live_start": "Запустить политику", "live_stop": "Стоп", "live_reset": "Сбросить робота", "live_off": "Сервер реального времени не запущен. Запустите rl/live_server.py и откройте эту страницу по его адресу (порт 43030).", "live_hint": "Перетаскивайте две целевые системы координат: симулируемый робот следует за ними в реальном времени.", "live_info": "итерация модели {0} · ошибка: левая {1} мм / {2}°, правая {3} мм / {4}° · момент руки сейчас {5}%, пик после смены цели {6}% от предела{7}", "live_contact": " · КОНТАКТ"}})) Object.assign(I18N[l], d);
+for (const [l, d] of Object.entries({"en": {"fz_wait": "Checking whether both targets can be grasped together…", "fz_ok": "Both targets can be grasped together (a collision-free posture exists; {0} of {1} search attempts reached both). Distance between targets: {2} m.", "fz_col": "A posture reaches both targets, but only with a collision. Distance between targets: {2} m.", "fz_no": "No posture found that reaches both targets together. Closest attempt misses by {3} mm / {4}°. Distance between targets: {2} m.", "fz_off": "Start the live server to check whether both targets can be grasped together.", "ghost": "show solution posture"}, "zh": {"fz_wait": "正在检查两个目标能否同时被抓取…", "fz_ok": "两个目标可以同时抓取（存在无碰撞姿态；{1} 次搜索中有 {0} 次同时到达两个目标）。两目标间距：{2} m。", "fz_col": "存在能同时到达两个目标的姿态，但会发生碰撞。两目标间距：{2} m。", "fz_no": "未找到能同时到达两个目标的姿态。最接近的一次仍相差 {3} mm / {4}°。两目标间距：{2} m。", "fz_off": "启动实时服务器后，可检查两个目标能否同时被抓取。", "ghost": "显示求解姿态"}, "ja": {"fz_wait": "2つのターゲットを同時に把持できるか確認中…", "fz_ok": "2つのターゲットは同時に把持できます（衝突のない姿勢があります。{1} 回の探索のうち {0} 回が両方に到達）。ターゲット間距離：{2} m。", "fz_col": "両方のターゲットに届く姿勢はありますが、衝突が発生します。ターゲット間距離：{2} m。", "fz_no": "両方のターゲットに同時に届く姿勢が見つかりません。最も近い試行でも {3} mm / {4}° ずれています。ターゲット間距離：{2} m。", "fz_off": "ライブサーバーを起動すると、2つのターゲットを同時に把持できるか確認できます。", "ghost": "解の姿勢を表示"}, "ru": {"fz_wait": "Проверяется, можно ли захватить обе цели одновременно…", "fz_ok": "Обе цели можно захватить одновременно (поза без столкновений существует; обеих целей достигли {0} из {1} попыток поиска). Расстояние между целями: {2} м.", "fz_col": "Существует поза, достигающая обеих целей, но только со столкновением. Расстояние между целями: {2} м.", "fz_no": "Не найдено позы, достигающей обеих целей одновременно. Лучшая попытка не доходит на {3} мм / {4}°. Расстояние между целями: {2} м.", "fz_off": "Запустите сервер реального времени, чтобы проверить, можно ли захватить обе цели одновременно.", "ghost": "показать найденную позу"}})) Object.assign(I18N[l], d);
+for (const [l, d] of Object.entries({"en": {"help_arrows": "<kbd>1</kbd><kbd>2</kbd> pick a target, then <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> slide it along the floor · <kbd>PgUp</kbd><kbd>PgDn</kbd> raise/lower · hold <kbd>Shift</kbd> for faster"}, "zh": {"help_arrows": "按 <kbd>1</kbd><kbd>2</kbd> 选择目标，再用 <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 在水平面内移动 · <kbd>PgUp</kbd><kbd>PgDn</kbd> 升高/降低 · 按住 <kbd>Shift</kbd> 加速"}, "ja": {"help_arrows": "<kbd>1</kbd><kbd>2</kbd> でターゲットを選び、<kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> で水平に移動 · <kbd>PgUp</kbd><kbd>PgDn</kbd> で上下 · <kbd>Shift</kbd> を押しながらで高速"}, "ru": {"help_arrows": "<kbd>1</kbd><kbd>2</kbd> — выбрать цель, затем <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> — двигать по горизонтали · <kbd>PgUp</kbd><kbd>PgDn</kbd> — выше/ниже · с <kbd>Shift</kbd> быстрее"}})) Object.assign(I18N[l], d);
+for (const [l, d] of Object.entries({"en": {"lock_l": "Keep left arm at rest", "lock_r": "Keep right arm at rest", "lock_hint": "A locked arm's target stays on that arm's folded rest pose and follows the chassis and lift, so you control only the other arm."}, "zh": {"lock_l": "左臂保持复位姿态", "lock_r": "右臂保持复位姿态", "lock_hint": "被锁定手臂的目标固定在该手臂的折叠复位位姿上，并随底盘和升降平台一起移动，因此只需控制另一只手臂。"}, "ja": {"lock_l": "左アームを待機姿勢に固定", "lock_r": "右アームを待機姿勢に固定", "lock_hint": "固定したアームのターゲットは折りたたんだ待機姿勢に置かれ、台車とリフトに追従します。操作するのはもう一方のアームだけです。"}, "ru": {"lock_l": "Левая рука в исходной позе", "lock_r": "Правая рука в исходной позе", "lock_hint": "Цель зафиксированной руки остаётся в её сложенной исходной позе и движется вместе с шасси и подъёмником, поэтому вы управляете только другой рукой."}})) Object.assign(I18N[l], d);
+let lang = 'en';
+try { lang = localStorage.getItem('lift3-lang') || ''; } catch { lang = ''; }
+if (!I18N[lang]) lang = Object.keys(I18N).find(l => (navigator.language || 'en').toLowerCase().startsWith(l)) || 'en';
+const tr = (key, ...a) => (I18N[lang][key] ?? I18N.en[key] ?? key).replace(/\{(\d)\}/g, (_, i) => a[+i] ?? '');
+const setText = (el, key) => { el.dataset.i18n = key; el.textContent = tr(key); return el; };
+const rerender = [];                       // callbacks for texts that carry numbers or state
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = tr(el.dataset.i18n); });
+  document.getElementById('help').innerHTML = tr('help') + '<br>' + tr('help_arrows');
+  rerender.forEach(f => f());
+}
+let statusState = ['loading', [], false];
+function setStatus(key, args = [], warn = false) {
+  statusState = [key, args, warn];
+  const el = document.getElementById('status');
+  el.className = warn ? 'warn' : '';
+  el.textContent = tr(key, ...args);
+}
+rerender.push(() => setStatus(...statusState));
+document.getElementById('lang').value = lang;
+document.getElementById('lang').onchange = e => {
+  lang = e.target.value;
+  try { localStorage.setItem('lift3-lang', lang); } catch { /* storage unavailable: keep for this visit only */ }
+  applyLang();
+};
+applyLang();
+
+
+// ROS package root (the folder holding urdf/ and meshes/), relative to this page.
+// Override with ?pkg=<path>. The first candidate that has urdf/LIFT3.urdf wins.
+const PKG_CANDIDATES = [new URLSearchParams(location.search).get('pkg'), '../LIFT3/LIFT3/', '../LIFT3/', '../'].filter(Boolean);
+let PKG = PKG_CANDIDATES[0], URDF_URL = PKG + 'urdf/LIFT3.urdf';
+// package://LIFT3/meshes/x.STL  ->  <PKG>/meshes/x.STL
+const resolveMesh = f => f.replace(/^package:\/\/[^/]+\//, PKG);
+
+// ---------- scene (Z-up, like URDF/ROS) ----------
+THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+// Quality: 2x supersampling (render above screen resolution, then downsample), filmic tone
+// mapping, soft shadows and image-based lighting. (DLSS itself is a native NVIDIA feature and
+// is not available to web pages; supersampling is the browser equivalent for edge quality.)
+let hiQ = true;
+function applyQuality() {
+  renderer.setPixelRatio(hiQ ? Math.max(2, Math.min(devicePixelRatio * 1.5, 3)) : 1);
+  renderer.shadowMap.enabled = hiQ;
+  scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
+  resize();
+}
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x3a3f48);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+camera.position.set(1.6, -1.6, 1.3);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0.5);
+controls.update();
+
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x30343c, 0.35));
+const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+const SUN_OFFSET = new THREE.Vector3(1.5, -2.2, 4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.6, bottom: -1.6, near: 0.5, far: 12 });
+sun.shadow.bias = -0.0003;
+sun.shadow.normalBias = 0.01;
+sun.shadow.radius = 4;
+scene.add(sun, sun.target);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.ShadowMaterial({ opacity: 0.35 }));
+floor.receiveShadow = true;
+floor.position.z = -0.001;
+scene.add(floor);
+const grid = new THREE.GridHelper(40, 80, 0x707888, 0x4c525e);
+grid.rotation.x = Math.PI / 2;
+scene.add(grid);
+const worldAxes = new THREE.AxesHelper(0.3);
+scene.add(worldAxes);
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+// ---------- URDF parsing ----------
+const nums = (s, d) => (s ? s.trim().split(/\s+/).map(Number) : d);
+function applyOrigin(obj, el) {
+  const xyz = nums(el?.getAttribute('xyz'), [0, 0, 0]);
+  const rpy = nums(el?.getAttribute('rpy'), [0, 0, 0]);
+  obj.position.set(...xyz);
+  obj.rotation.set(rpy[0], rpy[1], rpy[2], 'ZYX'); // URDF: R = Rz(yaw) Ry(pitch) Rx(roll)
+}
+const child = (el, tag) => [...el.children].find(c => c.tagName === tag);
+const children = (el, tag) => [...el.children].filter(c => c.tagName === tag);
+
+const robot = new THREE.Group();   // = base_link frame, moved on the ground plane
+scene.add(robot);
+const joints = {};                 // name -> {type, axis, lower, upper, move, value, ...}
+const links = {};                  // name -> {group, mass, com, inertia, color, childJoints:[]}
+const axisMarkers = [];
+const eeFrames = [];
+let meshOk = 0, meshTotal = 0;
+const stl = new STLLoader();
+
+function linkCapsule(a, b, r, mat) {
+  const g = new THREE.Group();
+  const d = new THREE.Vector3().subVectors(b, a), len = d.length();
+  if (len > 1e-6) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 20), mat);
+    c.position.copy(a).addScaledVector(d, 0.5);
+    c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+    g.add(c);
+  }
+  for (const p of [a, b]) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 12), mat);
+    s.position.copy(p);
+    g.add(s);
+  }
+  return g;
+}
+
+// Placeholder geometry built only from URDF numbers (joint origins, masses, inertias).
+function buildPlaceholder(L) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: L.color, roughness: 0.6, metalness: 0.1 });
+  const I = L.inertia, m = L.mass;
+  const pj = L.parentJoint;
+  if (pj && pj.type === 'continuous') {
+    // wheel: solid cylinder about the joint axis, size from inertia
+    const Ia = I[0] * pj.axis.x ** 2 + I[1] * pj.axis.y ** 2 + I[2] * pj.axis.z ** 2;
+    const r = Math.sqrt(2 * Ia / m);
+    const It = (I[0] + I[1] + I[2] - Ia) / 2;
+    const w = Math.sqrt(Math.max(12 * (It / m - r * r / 4), 1e-4));
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 32), mat);
+    c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pj.axis);
+    c.position.copy(L.com);
+    g.add(c);
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(w * 1.04, r * 1.7, 0.012),
+      new THREE.MeshStandardMaterial({ color: 0x8b93a1 }));   // spoke, so spin is visible
+    mark.position.copy(L.com);
+    g.add(mark);
+    L.wheelRadius = r;
+  } else if (m > 3) {
+    // heavy body: box with the same mass and principal inertia
+    const dim = k => Math.sqrt(Math.max(6 * (I[0] + I[1] + I[2] - 2 * I[k]) / m, 1e-4));
+    const b = new THREE.Mesh(new THREE.BoxGeometry(dim(0), dim(1), dim(2)), mat);
+    b.position.copy(L.com);
+    g.add(b);
+  } else if (L.childJoints.length === 0 && pj && pj.type === 'prismatic') {
+    // gripper finger
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.012, 0.026), mat);
+    b.position.set(0.035, 0, 0);
+    g.add(b);
+  } else {
+    // arm link: capsules from link origin to each child joint
+    const r = THREE.MathUtils.clamp(0.03 * Math.sqrt(m), 0.014, 0.03);
+    const o = new THREE.Vector3();
+    for (const cj of L.childJoints.filter(j => j.type !== 'prismatic'))
+      g.add(linkCapsule(o, cj.origin.position, r, mat));
+    if (L.childJoints.some(j => j.type === 'prismatic')) {
+      // gripper palm
+      const x = L.childJoints[0].origin.position.x;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(x, 0.11, 0.04), mat);
+      b.position.set(x / 2, 0, 0);
+      g.add(b);
+    }
+  }
+  return g;
+}
+
+async function loadVisuals(L, linkEl, materials) {
+  const placeholder = buildPlaceholder(L);
+  L.group.add(placeholder);
+  const visuals = children(linkEl, 'visual');
+  const results = await Promise.all(visuals.map(async v => {
+    const meshEl = child(child(v, 'geometry'), 'mesh');
+    if (!meshEl) return null;
+    meshTotal++;
+    try {
+      const res = await fetch(resolveMesh(meshEl.getAttribute('filename')));
+      if (!res.ok) throw new Error(res.status);
+      const geo = stl.parse(await res.arrayBuffer());
+      geo.computeVertexNormals();
+      const mname = child(v, 'material')?.getAttribute('name');
+      const look = { lift_white: { roughness: 0.35, metalness: 0.0, clearcoat: 0.6, clearcoatRoughness: 0.25 },
+        lift_black: { roughness: 0.42, metalness: 0.25, clearcoat: 0.3, clearcoatRoughness: 0.4 },
+        lift_silver: { roughness: 0.28, metalness: 0.9 },
+        lift_rubber: { roughness: 0.9, metalness: 0.0 } }[mname] ?? { roughness: 0.5, metalness: 0.2 };
+      const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: materials[mname] ?? 0xb0b0b0, ...look }));
+      mesh.castShadow = mesh.receiveShadow = true;
+      const s = nums(meshEl.getAttribute('scale'), [1, 1, 1]);
+      mesh.scale.set(...s);
+      const holder = new THREE.Group();
+      applyOrigin(holder, child(v, 'origin'));
+      holder.add(mesh);
+      meshOk++;
+      return holder;
+    } catch { return null; }
+  }));
+  const ok = results.filter(Boolean);
+  if (ok.length === visuals.length && ok.length) {
+    L.group.remove(placeholder);
+    ok.forEach(h => L.group.add(h));
+  }
+  L.group.traverse(o => { if (o.isMesh) { o.userData.link = L; (L.meshes ??= []).push(o); } });
+}
+
+async function loadURDF() {
+  let txt = null;
+  for (const c of PKG_CANDIDATES) {
+    for (const u of [c + 'urdf/LIFT3.urdf', c + 'LIFT3.urdf']) {
+      const r = await fetch(u).catch(() => null);
+      if (r?.ok) { txt = await r.text(); PKG = c; URDF_URL = u; break; }
+    }
+    if (txt) break;
+  }
+  if (!txt) throw new Error('LIFT3.urdf not found under ' + PKG_CANDIDATES.join(', '));
+  const xml = new DOMParser().parseFromString(txt, 'application/xml');
+  const root = xml.querySelector('robot');
+  const materials = {};
+  for (const m of children(root, 'material')) {
+    const c = nums(child(m, 'color')?.getAttribute('rgba'), [0.7, 0.7, 0.7, 1]);
+    materials[m.getAttribute('name')] = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
+  }
+  const linkEls = {};
+  for (const el of children(root, 'link')) {
+    const name = el.getAttribute('name');
+    const inr = child(el, 'inertial');
+    const ie = inr && child(inr, 'inertia');
+    const mname = child(children(el, 'visual')[0] ?? el, 'material')?.getAttribute('name');
+    let color = materials[mname] ?? new THREE.Color(0x9aa0aa);
+    // pure black placeholders are unreadable on a dark background: lift them slightly
+    if (color.getHSL({}).l < 0.12) color = color.clone().offsetHSL(0, 0, 0.14);
+    links[name] = {
+      name, group: new THREE.Group(), childJoints: [], parentJoint: null, color,
+      mass: inr ? +child(inr, 'mass').getAttribute('value') : 0,
+      com: new THREE.Vector3(...nums(inr && child(inr, 'origin')?.getAttribute('xyz'), [0, 0, 0])),
+      inertia: ie ? ['ixx', 'iyy', 'izz'].map(k => +ie.getAttribute(k)) : [1e-4, 1e-4, 1e-4],
+    };
+    linkEls[name] = el;
+  }
+  for (const el of children(root, 'joint')) {
+    const name = el.getAttribute('name'), type = el.getAttribute('type');
+    const lim = child(el, 'limit');
+    const origin = new THREE.Group(), move = new THREE.Group();
+    applyOrigin(origin, child(el, 'origin'));
+    origin.add(move);
+    const parent = links[child(el, 'parent').getAttribute('link')];
+    const kid = links[child(el, 'child').getAttribute('link')];
+    parent.group.add(origin);
+    move.add(kid.group);
+    const J = {
+      name, type, origin, move, value: 0, parent, child: kid,
+      axis: new THREE.Vector3(...nums(child(el, 'axis')?.getAttribute('xyz'), [1, 0, 0])).normalize(),
+      lower: lim?.hasAttribute('lower') ? +lim.getAttribute('lower') : -Math.PI,
+      upper: lim?.hasAttribute('upper') ? +lim.getAttribute('upper') : Math.PI,
+      effort: lim ? +lim.getAttribute('effort') : NaN,
+      velocity: lim ? +lim.getAttribute('velocity') : NaN,
+    };
+    // Continuous joints and obviously placeholder limits (> 2 turns) are shown as one full turn.
+    if (type === 'continuous' || J.upper - J.lower > 4 * Math.PI) { J.lower = -Math.PI; J.upper = Math.PI; }
+    joints[name] = J;
+    parent.childJoints.push(J);
+    kid.parentJoint = J;
+    if (type !== 'fixed') {
+      const mk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.12, 8),
+        new THREE.MeshBasicMaterial({ color: type === 'prismatic' ? 0xf0b343 : 0x4da3ff }));
+      mk.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), J.axis);
+      mk.visible = false;
+      origin.add(mk);
+      mk.userData.color = mk.material.color.getHex();
+      J.marker = mk;
+      axisMarkers.push(mk);
+    }
+  }
+  const rootLink = Object.values(links).find(l => !l.parentJoint);
+  robot.add(rootLink.group);
+  await Promise.all(Object.values(links).map(L => loadVisuals(L, linkEls[L.name], materials)));
+  return rootLink;
+}
+
+// ---------- joint + chassis state ----------
+function setJoint(name, v, fromUI) {
+  const J = joints[name];
+  if (J.type === 'continuous') v = Math.atan2(Math.sin(v), Math.cos(v));
+  else v = THREE.MathUtils.clamp(v, J.lower, J.upper);
+  J.value = v;
+  if (J.type === 'prismatic') J.move.position.copy(J.axis).multiplyScalar(v);
+  else J.move.quaternion.setFromAxisAngle(J.axis, v);
+  if (J.ui) { if (!fromUI) J.ui.slider.value = v; J.ui.val.textContent = fmt(J, v); }
+  if (fromUI && document.getElementById('cCouple').checked && J.mate) setJoint(J.mate, v);
+}
+const fmt = (J, v) => J.type === 'prismatic' ? (v * 1000).toFixed(0) + ' mm' : (v * 180 / Math.PI).toFixed(0) + '°';
+
+const base = { x: 0, y: 0, yaw: 0 };
+let wheels = [], groundZ = 0, wasDriving = false;
+function setBase(x, y, yaw) {
+  Object.assign(base, { x, y, yaw: Math.atan2(Math.sin(yaw), Math.cos(yaw)) });
+  robot.position.set(x, y, groundZ);
+  robot.rotation.z = base.yaw;
+}
+
+// ---------- omni-wheel chassis dynamics ----------
+// The chassis has no x/y/yaw actuators. Each wheel i has a velocity command; a velocity
+// loop turns the error into motor torque (clamped to the URDF effort limit). Torque / radius
+// is the traction force along the wheel's rolling direction t_i; rollers slide freely along
+// the axle. With no slip, wheel speed and body twist v = (vx, vy, wz) are tied by
+//     w_i = -(t_i . (v_lin + wz z x p_i)) / r = -(row_i . v) / r
+// and the planar rigid body obeys   (M_body + sum Iw/r^2 row_i row_i^T) v' = sum row_i (-tau_i / r) + Coriolis.
+const KP_WHEEL = 2.0;      // N·m per rad/s of wheel speed error
+const WHEEL_DAMP = 0.02;   // N·m·s/rad rolling loss
+const drive = { v: [0, 0, 0], cmd: [], w: [], tau: [], ui: [] };
+const _A = new THREE.Matrix3(), _q = new THREE.Vector3(), _c = new THREE.Vector3();
+function massProps() {     // total mass, COM (cx, cy) and yaw inertia about the base origin, in the base frame
+  robot.updateMatrixWorld(true);
+  let m = 0, cx = 0, cy = 0, Io = 0;
+  for (const Lk of Object.values(links)) {
+    if (!Lk.mass) continue;
+    robot.worldToLocal(Lk.group.localToWorld(_c.copy(Lk.com)));
+    m += Lk.mass; cx += Lk.mass * _c.x; cy += Lk.mass * _c.y;
+    Io += Lk.inertia[2] + Lk.mass * (_c.x * _c.x + _c.y * _c.y);
+  }
+  return { m, cx: cx / m, cy: cy / m, Io };
+}
+function twistToWheels(vx, vy, wz) {
+  return wheels.map(w => THREE.MathUtils.clamp(-(w.row[0] * vx + w.row[1] * vy + w.row[2] * wz) / w.r, -w.J.velocity, w.J.velocity));
+}
+function showCmd() { drive.ui.forEach((u, i) => { const c = drive.cmd[i] ?? 0; u.slider.value = c; u.val.textContent = c.toFixed(1) + ' r/s'; }); }
+function setWheelCmd(c) { drive.cmd = c.slice(); showCmd(); }
+function resetDrive() {
+  drive.v = [0, 0, 0];
+  drive.cmd = wheels.map(() => 0); drive.w = wheels.map(() => 0); drive.tau = wheels.map(() => 0);
+  for (const w of wheels) setJoint(w.J.name, 0);
+  setBase(0, 0, 0);
+  wheels.forEach((w, i) => bindRow(w.J.name, drive.ui[i]));
+  showCmd();
+}
+function driveStep(dt) {
+  if (!wheels.length) return;
+  const mp = massProps(), N = 4, h = dt / N, v = drive.v;
+  for (let n = 0; n < N; n++) {
+    const a = [mp.m, 0, -mp.m * mp.cy, 0, mp.m, mp.m * mp.cx, -mp.m * mp.cy, mp.m * mp.cx, mp.Io];
+    const Q = [mp.m * v[2] * v[1], -mp.m * v[2] * v[0], 0];
+    wheels.forEach((w, i) => {
+      const wi = -(w.row[0] * v[0] + w.row[1] * v[1] + w.row[2] * v[2]) / w.r;
+      const tau = THREE.MathUtils.clamp(KP_WHEEL * (drive.cmd[i] - wi), -w.J.effort, w.J.effort);
+      drive.tau[i] = tau;
+      const f = -(tau - WHEEL_DAMP * wi) / w.r, k = w.Iw / (w.r * w.r);
+      for (let r = 0; r < 3; r++) { Q[r] += w.row[r] * f; for (let c = 0; c < 3; c++) a[3 * r + c] += k * w.row[r] * w.row[c]; }
+    });
+    _q.set(...Q).applyMatrix3(_A.set(...a).invert());
+    v[0] += _q.x * h; v[1] += _q.y * h; v[2] += _q.z * h;
+    const c = Math.cos(base.yaw), s = Math.sin(base.yaw);
+    setBase(base.x + (c * v[0] - s * v[1]) * h, base.y + (s * v[0] + c * v[1]) * h, base.yaw + v[2] * h);
+    wheels.forEach((w, i) => {
+      drive.w[i] = -(w.row[0] * v[0] + w.row[1] * v[1] + w.row[2] * v[2]) / w.r;
+      setJoint(w.J.name, w.J.value + drive.w[i] * h);
+    });
+  }
+}
+
+// ---------- joint highlight ----------
+// Hovering a slider tints the link that joint moves (blue); clicking a slider row or a link in
+// the 3D view selects it (orange) and shows the joint's axis until another one is selected.
+let hotJoint = null, selJoint = null;
+function paintJoint(name, color, on) {
+  const J = joints[name]; if (!J) return;
+  for (const mesh of J.child.meshes ?? []) {
+    if (!mesh.material.emissive) continue;
+    mesh.material.emissive.setHex(on ? color : 0x000000);
+    mesh.material.emissiveIntensity = on ? 0.55 : 1;
+  }
+  if (J.marker) {
+    J.marker.visible = on || document.getElementById('cAxes').checked;
+    J.marker.scale.setScalar(on ? 2.2 : 1);
+    J.marker.material.color.setHex(on ? color : J.marker.userData.color);
+    J.marker.material.depthTest = !on;
+    J.marker.renderOrder = on ? 10 : 0;
+  }
+}
+function refreshHighlight() {
+  for (const n in joints) paintJoint(n, 0, false);
+  if (hotJoint && hotJoint !== selJoint) paintJoint(hotJoint, 0x2f7fff, true);
+  if (selJoint) paintJoint(selJoint, 0xff8a1f, true);
+  for (const n in joints) {
+    const row = joints[n].row; if (!row) continue;
+    row.classList.toggle('hot', n === hotJoint && n !== selJoint);
+    row.classList.toggle('sel', n === selJoint);
+  }
+}
+function selectJoint(name, scroll) {
+  selJoint = name === selJoint ? null : name;
+  refreshHighlight();
+  const row = selJoint && joints[selJoint].row;
+  if (row && scroll) { row.closest('details').open = true; row.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+function bindRow(name, ui) {
+  const J = joints[name];
+  J.row = ui.row;
+  ui.row.addEventListener('pointerenter', () => { hotJoint = name; refreshHighlight(); });
+  ui.row.addEventListener('pointerleave', () => { if (hotJoint === name) { hotJoint = null; refreshHighlight(); } });
+  ui.row.addEventListener('pointerdown', () => { if (selJoint !== name) selectJoint(name); });
+  ui.slider.addEventListener('focus', () => { if (selJoint !== name) selectJoint(name); });
+}
+
+// ---------- UI ----------
+function addGroup(title, open = true) {
+  const d = document.createElement('details');
+  d.open = open;
+  d.innerHTML = `<summary data-i18n="${title}">${tr(title)}</summary>`;
+  document.getElementById('groups').append(d);
+  return d;
+}
+function addSlider(parent, label, min, max, step, oninput, title = '') {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.title = title;
+  row.innerHTML = `<span class="name">${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="0"><span class="val"></span>`;
+  parent.append(row);
+  const slider = row.children[1], val = row.children[2];
+  slider.addEventListener('input', () => oninput(+slider.value));
+  return { slider, val, row };
+}
+function buildUI() {
+  buildTargetUI();
+  const gB = addGroup('g_chassis');
+  const note = document.createElement('div');
+  note.className = 'sub';
+  setText(note, 'chassis_note');
+  gB.append(note);
+  drive.ui = wheels.map((w, i) => addSlider(gB, w.J.name + ' ω', -w.J.velocity, w.J.velocity, 0.1, v => { drive.cmd[i] = v; showCmd(); },
+    `velocity command, limit ${w.J.velocity} rad/s, torque limit ${w.J.effort} N·m`));
+  const rb = document.createElement('div'); rb.className = 'btns'; rb.style.marginTop = '6px';
+  for (const [text, fn] of [['stop_wheels', () => setWheelCmd(wheels.map(() => 0))], ['reset_chassis', resetDrive]]) {
+    const b = setText(document.createElement('button'), text); b.onclick = fn; rb.append(b);
+  }
+  gB.append(rb);
+  showCmd();
+  const groups = [
+    ['g_lift', n => n === 'joint5', true],
+    ['g_larm', n => /^left_joint1[1-6]$/.test(n), true],
+    ['g_lgrip', n => /^left_joint1[78]$/.test(n), true],
+    ['g_rarm', n => /^right_joint2[1-6]$/.test(n), true],
+    ['g_rgrip', n => /^right_joint2[78]$/.test(n), true],
+  ];
+  const used = new Set();
+  for (const [title, test, open] of groups) {
+    const names = Object.keys(joints).filter(n => joints[n].type !== 'fixed' && test(n));
+    if (!names.length) continue;
+    const g = addGroup(title, open);
+    for (const n of names) {
+      used.add(n);
+      const J = joints[n];
+      J.ui = addSlider(g, n, J.lower, J.upper, (J.upper - J.lower) / 1000, v => setJoint(n, v, true),
+        `${J.type} · axis ${J.axis.toArray().join(' ')} · effort ${J.effort} · velocity ${J.velocity}`);
+    }
+  }
+  const rest = Object.keys(joints).filter(n => ['revolute', 'prismatic'].includes(joints[n].type) && !used.has(n));
+  if (rest.length) {
+    const g = addGroup('g_other');
+    for (const n of rest) { const J = joints[n]; J.ui = addSlider(g, n, J.lower, J.upper, (J.upper - J.lower) / 1000, v => setJoint(n, v, true)); }
+  }
+  for (const n in joints) if (joints[n].ui) bindRow(n, joints[n].ui);
+  // finger pairs = prismatic siblings under the same parent link
+  for (const L of Object.values(links)) {
+    const f = L.childJoints.filter(j => j.type === 'prismatic' && j.child.childJoints.length === 0);
+    if (f.length === 2) { f[0].mate = f[1].name; f[1].mate = f[0].name; }
+  }
+}
+
+const movable = () => Object.values(joints).filter(j => j.type === 'revolute' || j.type === 'prismatic');
+function resetAll() {
+  for (const J of Object.values(joints)) if (J.type !== 'fixed') setJoint(J.name, 0);
+  resetDrive();
+}
+let anim = false, animT = 0, animFrom = {};
+document.getElementById('bReset').onclick = () => { stopAnim(); resetAll(); resetTargets(); if (live.on) post('/api/reset'); };
+document.getElementById('bRandom').onclick = () => {
+  stopAnim();
+  for (const J of movable()) {
+    if (J.mate && J.name > J.mate) continue;
+    const v = J.lower + Math.random() * (J.upper - J.lower);
+    setJoint(J.name, v); if (J.mate) setJoint(J.mate, v);
+  }
+};
+function stopAnim() { anim = false; document.getElementById('bAnim').classList.remove('on'); }
+document.getElementById('bAnim').onclick = e => {
+  anim = !anim; animT = 0;
+  e.target.classList.toggle('on', anim);
+  for (const J of movable()) animFrom[J.name] = J.value;
+};
+document.getElementById('cHiQ').onchange = e => { hiQ = e.target.checked; applyQuality(); };
+document.getElementById('cFrames').onchange = e => eeFrames.forEach(f => f.axes.visible = e.target.checked);
+document.getElementById('cAxes').onchange = e => { axisMarkers.forEach(m => m.visible = e.target.checked); refreshHighlight(); };
+
+const keys = new Set();
+const MOVE_KEYS = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'pageup', 'pagedown'];
+addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey) return;
+  const k = e.key.toLowerCase();
+  keys.add(k);
+  // arrow keys belong to the selected target: do not let them scroll the panel or nudge a slider
+  if (selected && MOVE_KEYS.includes(k)) { e.preventDefault(); if (document.activeElement?.tagName === 'INPUT') document.activeElement.blur(); }
+});
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+
+// ---------- target frames (free 6-DoF, dragged with a gizmo) ----------
+const targets = [];
+const pickables = [];
+const gizmo = new TransformControls(camera, renderer.domElement);
+gizmo.setSize(0.7);
+gizmo.addEventListener('dragging-changed', e => { controls.enabled = !e.value; });
+scene.add(gizmo);
+function makeTarget(label, color, home) {
+  const g = new THREE.Group();
+  const cols = [0xff4d4d, 0x4dd964, 0x4d8dff], L = 0.16;
+  cols.forEach((c, i) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, L, 12), new THREE.MeshBasicMaterial({ color: c }));
+    const d = new THREE.Vector3().setComponent(i, 1);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d);
+    m.position.copy(d).multiplyScalar(L / 2);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.035, 12), m.material);
+    tip.quaternion.copy(m.quaternion);
+    tip.position.copy(d).multiplyScalar(L);
+    g.add(m, tip);
+  });
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.022, 20, 12), new THREE.MeshBasicMaterial({ color }));
+  g.add(ball);
+  g.position.copy(home);
+  scene.add(g);
+  const T = { label, key: label[0] === 'L' ? 't_left' : 't_right', group: g, home: home.clone(), ball };
+  ball.userData.target = T;
+  pickables.push(ball);
+  targets.push(T);
+  return T;
+}
+makeTarget('L target', 0xffa733, new THREE.Vector3(0.55, 0.2, 0.75));
+makeTarget('R target', 0x33d6ff, new THREE.Vector3(0.55, -0.2, 0.75));
+let selected = null;
+// "Keep arm at rest": the target is pinned to that arm's folded rest pose, expressed relative to the
+// lift platform, so it travels with the chassis and the lift and the arm simply stays folded.
+const lock = [false, false], restPose = [], lockUI = [];
+const _M = new THREE.Matrix4(), _S = new THREE.Vector3();
+function captureRest() {
+  const b = links.body5?.group; if (!b) return;
+  robot.updateMatrixWorld(true);
+  eeFrames.forEach((f, i) => { restPose[i] = new THREE.Matrix4().copy(b.matrixWorld).invert().multiply(f.tcp.matrixWorld); });
+}
+function applyLocks() {
+  const b = links.body5?.group; if (!b || !restPose.length) return;
+  b.updateWorldMatrix(true, false);
+  lock.forEach((on, i) => {
+    if (on && restPose[i]) _M.multiplyMatrices(b.matrixWorld, restPose[i]).decompose(targets[i].group.position, targets[i].group.quaternion, _S);
+  });
+}
+function setLock(i, on) {
+  lock[i] = on;
+  if (on && selected === targets[i]) selectTarget(null);
+  targets[i].ball.material.opacity = on ? 0.35 : 1; targets[i].ball.material.transparent = on;
+  lockUI[i]?.classList.toggle('on', on);
+  if (live.ok) post('/api/lock', { lock });
+  if (!on && restPose[i]) applyLocks();
+}
+function selectTarget(T) {
+  if (T && lock[targets.indexOf(T)]) return;          // a locked target cannot be picked or dragged
+  selected = T;
+  if (T) gizmo.attach(T.group); else gizmo.detach();
+  refreshTargetUI();
+}
+function setGizmoMode(m) { gizmo.setMode(m); refreshTargetUI(); }
+function toggleSpace() { gizmo.setSpace(gizmo.space === 'world' ? 'local' : 'world'); refreshTargetUI(); }
+const tUI = {};
+function refreshTargetUI() {
+  if (!tUI.sel) return;
+  tUI.sel.forEach((b, i) => b.classList.toggle('on', selected === targets[i]));
+  tUI.move.classList.toggle('on', gizmo.mode === 'translate');
+  tUI.rot.classList.toggle('on', gizmo.mode === 'rotate');
+  tUI.space.textContent = tr(gizmo.space === 'world' ? 'axes_world' : 'axes_local');
+}
+rerender.push(() => refreshTargetUI());
+// Default target = the folded robot's own gripper orientation (identity), placed in front of each gripper.
+function resetTargets() { targets.forEach(T => { T.group.position.copy(T.home); T.group.quaternion.identity(); }); }
+function buildTargetUI() {
+  const g = addGroup('g_targets');
+  const mk = (row, key, fn) => { const b = document.createElement('button'); if (key) setText(b, key); b.onclick = fn; row.append(b); return b; };
+  const r1 = document.createElement('div'); r1.className = 'btns';
+  tUI.sel = targets.map(T => mk(r1, T.key, () => selectTarget(selected === T ? null : T)));
+  const r2 = document.createElement('div'); r2.className = 'btns';
+  tUI.move = mk(r2, 'move', () => setGizmoMode('translate'));
+  tUI.rot = mk(r2, 'rotate', () => setGizmoMode('rotate'));
+  tUI.space = mk(r2, '', toggleSpace);
+  const r3 = document.createElement('div'); r3.className = 'btns';
+  mk(r3, 'snap', () => targets.forEach((T, i) => {
+    const f = eeFrames[i]; if (!f) return;
+    f.tcp.updateWorldMatrix(true, false);
+    f.tcp.matrixWorld.decompose(T.group.position, T.group.quaternion, new THREE.Vector3());
+  }));
+  mk(r3, 'rand_t', () => targets.forEach((T, i) => {
+    T.group.position.set(0.3 + Math.random() * 0.8, (i ? -1 : 1) * (0.05 + Math.random() * 0.5), 0.2 + Math.random() * 1.1);
+    T.group.quaternion.set(Math.random() - .5, Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize();
+  }));
+  mk(r3, 'reset_t', resetTargets);
+  fz.info = document.createElement('div');
+  fz.info.className = 'sub'; fz.info.style.cssText = 'margin-top:6px;padding:6px 8px;border-radius:6px;border:1px solid var(--line)';
+  g.append(r1, r2, r3, fz.info);
+  showFeasible();
+  refreshTargetUI();
+}
+// click a target's ball to select it
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || gizmo.axis) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(pickables)[0];
+  if (hit) { selectTarget(hit.object.userData.target); return; }
+  const lh = ray.intersectObject(robot, true).find(h => h.object.userData.link?.parentJoint);
+  if (lh) selectJoint(lh.object.userData.link.parentJoint.name, true);
+  else if (selJoint) selectJoint(selJoint);
+});
+addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey) return;
+  const key = e.key.toLowerCase();
+  if (key === 't') setGizmoMode('translate');
+  else if (key === 'g') setGizmoMode('rotate');
+  else if (key === 'x') toggleSpace();
+  else if (key === '1') selectTarget(targets[0]);
+  else if (key === '2') selectTarget(targets[1]);
+  else if (key === 'escape') selectTarget(null);
+});
+
+// ---------- policy rollout playback (../rl/rollouts.json written by rl/evaluate.py) ----------
+const play = { data: null, k: -1, t: 0, on: false, ui: {} };
+function applyFrame(fi) {
+  const R = play.data[play.k];
+  applyPose(R.frames[Math.min(fi, R.frames.length - 1)], R.joints);
+}
+function applyPose(f, names) {
+  const c = Math.cos(base.yaw), s = Math.sin(base.yaw);
+  let dyaw = f[2] - base.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+  const dx = c * (f[0] - base.x) + s * (f[1] - base.y), dy = -s * (f[0] - base.x) + c * (f[1] - base.y);
+  for (const w of wheels) setJoint(w.J.name, w.J.value - (w.row[0] * dx + w.row[1] * dy + w.row[2] * dyaw) / w.r);
+  setBase(f[0], f[1], f[2]);
+  names.forEach((n, i) => { if (i > 2 && joints[n]) setJoint(n, f[i]); });
+}
+function showReplayInfo() {
+  if (!play.ui.info) return;
+  if (play.k < 0) { play.ui.info.textContent = ''; return; }
+  const r = play.data[play.k].result;
+  play.ui.info.textContent = tr('replay_info', tr(r.success ? 'success' : 'not_reached'), r.pos_err_mm[0], r.rot_err_deg[0],
+    r.pos_err_mm[1], r.rot_err_deg[1], (r.peak_torque_ratio * 100).toFixed(0));
+}
+const showPause = () => { if (play.ui.pause) play.ui.pause.textContent = tr(play.on || play.k < 0 ? 'pause' : 'play'); };
+rerender.push(showReplayInfo, showPause);
+function loadRollout(k) {
+  play.k = k; play.t = 0; play.on = true;
+  stopAnim();
+  const R = play.data[k];
+  R.targets.forEach((T, i) => { targets[i].group.position.set(...T.p); targets[i].group.quaternion.set(...T.q); });
+  selectTarget(null);
+  drive.v = [0, 0, 0]; setWheelCmd(wheels.map(() => 0));
+  setBase(R.frames[0][0], R.frames[0][1], R.frames[0][2]);
+  play.ui.scrub.max = R.frames.length - 1;
+  const r = R.result;
+  showReplayInfo();
+  play.ui.btns.forEach((b, i) => b.classList.toggle('on', i === k));
+  showPause();
+}
+async function buildPlaybackUI() {
+  const res = await fetch('../rl/rollouts.json', { cache: 'no-store' }).catch(() => null);
+  if (!res?.ok) return;
+  try { play.data = await res.json(); } catch { play.data = null; }      // tolerate a half-written file
+  if (!Array.isArray(play.data) || !play.data.length) { play.data = null; return; }
+  const g = addGroup('g_replay');
+  document.getElementById('groups').prepend(g);
+  const r1 = document.createElement('div'); r1.className = 'btns';
+  play.ui.btns = play.data.map((R, k) => { const b = document.createElement('button'); b.textContent = '#' + (k + 1); b.onclick = () => loadRollout(k); r1.append(b); return b; });
+  const r2 = document.createElement('div'); r2.className = 'btns';
+  play.ui.pause = document.createElement('button'); showPause();
+  play.ui.pause.onclick = () => { if (play.k < 0) return; play.on = !play.on; showPause(); };
+  const stop = setText(document.createElement('button'), 'exit_replay');
+  stop.onclick = () => { play.on = false; play.k = -1; play.ui.btns.forEach(b => b.classList.remove('on')); showReplayInfo(); showPause(); };
+  r2.append(play.ui.pause, stop);
+  play.ui.scrub = document.createElement('input');
+  Object.assign(play.ui.scrub, { type: 'range', min: 0, max: 1, step: 1, value: 0 });
+  play.ui.scrub.oninput = () => { if (play.k < 0) return; play.t = +play.ui.scrub.value * play.data[play.k].dt; play.on = false; showPause(); applyFrame(+play.ui.scrub.value); };
+  play.ui.info = document.createElement('div'); play.ui.info.className = 'sub'; play.ui.info.style.marginTop = '6px';
+  g.append(r1, r2, play.ui.scrub, play.ui.info);
+}
+
+// ---------- live policy (rl/live_server.py): the server simulates, this page shows and sends targets ----------
+const live = { on: false, ok: false, busy: false, last: 0, sent: '', sentAt: 0, st: null, ui: {} };
+const targetPayload = () => ({ targets: targets.map(T => ({ p: T.group.position.toArray(), q: T.group.quaternion.toArray() })) });
+const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) }).catch(() => null);
+function showLive() {
+  const u = live.ui; if (!u.info) return;
+  u.start.textContent = tr(live.on ? 'live_stop' : 'live_start');
+  u.start.classList.toggle('on', live.on);
+  u.start.disabled = u.reset.disabled = !live.ok;
+  const s = live.st;
+  if (!live.ok) u.info.textContent = tr('live_off');
+  else if (!live.on || !s?.ready) u.info.textContent = tr('live_hint');
+  else u.info.textContent = tr('live_info', s.iter, s.pos_err_mm[0], s.rot_err_deg[0], s.pos_err_mm[1], s.rot_err_deg[1],
+    (Math.max(...s.torque_ratio) * 100).toFixed(0), (s.peak * 100).toFixed(0), s.contact ? tr('live_contact') : '');
+}
+rerender.push(showLive);
+async function buildLiveUI() {
+  const g = addGroup('g_live');
+  document.getElementById('groups').prepend(g);
+  const r = document.createElement('div'); r.className = 'btns';
+  live.ui.start = document.createElement('button');
+  live.ui.start.onclick = () => {
+    live.on = !live.on;
+    if (live.on) { stopAnim(); play.on = false; play.k = -1; live.sent = ''; post('/api/lock', { lock }); }
+    showLive();
+  };
+  live.ui.reset = setText(document.createElement('button'), 'live_reset');
+  live.ui.reset.onclick = () => { resetTargets(); selectTarget(null); post('/api/reset'); };
+  live.ui.info = document.createElement('div'); live.ui.info.className = 'sub'; live.ui.info.style.marginTop = '6px';
+  r.append(live.ui.start, live.ui.reset);
+  const rl = document.createElement('div'); rl.className = 'btns';
+  ['lock_l', 'lock_r'].forEach((key, i) => {
+    const b = setText(document.createElement('button'), key);
+    b.onclick = () => setLock(i, !lock[i]);
+    lockUI[i] = b; rl.append(b);
+  });
+  const lh = setText(document.createElement('div'), 'lock_hint'); lh.className = 'sub';
+  g.append(r, live.ui.info, rl, lh);
+  const res = await fetch('/api/state', { cache: 'no-store' }).catch(() => null);
+  live.ok = !!res?.ok && (res.headers.get('content-type') || '').includes('json');
+  showLive();
+  showFeasible();
+}
+async function liveTick(now) {
+  if (live.busy || now - live.last < 30) return;
+  live.busy = true; live.last = now;
+  try {
+    const body = JSON.stringify(targetPayload());
+    if (body !== live.sent && now - live.sentAt > 80) { live.sent = body; live.sentAt = now; post('/api/targets', JSON.parse(body)); }
+    const res = await fetch('/api/state', { cache: 'no-store' });
+    const s = await res.json();
+    if (s.ready && live.on) { live.st = s; applyPose(s.q, s.joints); showLive(); }
+  } catch { /* server went away: keep the last pose */ }
+  live.busy = false;
+}
+
+// ---------- can both targets be grasped together? (asked from rl/live_server.py -> dual_ik.py) ----------
+const fz = { info: null, res: null, sent: '', pending: false, changedAt: 0, last: '' };
+const fzLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  new THREE.LineDashedMaterial({ color: 0x8b93a1, dashSize: 0.04, gapSize: 0.025 }));
+scene.add(fzLine);
+function showFeasible() {
+  if (!fz.info) return;
+  const r = fz.res;
+  let key = 'fz_off', col = '#8b93a1';
+  if (live.ok) {
+    if (!r || fz.pending) { key = 'fz_wait'; }
+    else if (r.reachable && r.collision_free) { key = 'fz_ok'; col = '#4dd964'; }
+    else if (r.reachable) { key = 'fz_col'; col = '#f0b343'; }
+    else { key = 'fz_no'; col = '#ff5b5b'; }
+  }
+  fz.info.textContent = r ? tr(key, r.solved, r.attempts, r.target_distance_m.toFixed(2), r.best_pos_err_mm, r.best_rot_err_deg) : tr(key);
+  fz.info.style.borderColor = col; fz.info.style.color = col === '#8b93a1' ? '' : col;
+  fzLine.material.color.set(col);
+}
+rerender.push(showFeasible);
+function feasibleTick(now) {
+  const a = targets[0].group.position, b = targets[1].group.position;
+  fzLine.geometry.setFromPoints([a, b]); fzLine.computeLineDistances();
+  if (!live.ok) return;
+  if (lock[0] || lock[1]) { fz.res = null; fz.sent = ''; fz.info.textContent = tr('lock_hint'); fz.info.style.borderColor = ''; fz.info.style.color = ''; return; }
+  const body = JSON.stringify(targetPayload());
+  if (body !== fz.last) { fz.last = body; fz.changedAt = now; }
+  if (fz.pending || body === fz.sent || now - fz.changedAt < 250) return;     // wait until the drag pauses
+  fz.sent = body; fz.pending = true; showFeasible();
+  post('/api/feasible', JSON.parse(body)).then(r => r && r.ok ? r.json() : null).then(r => { fz.pending = false; if (r) fz.res = r; showFeasible(); })
+    .catch(() => { fz.pending = false; });
+}
+
+// ---------- main loop ----------
+const hud = document.getElementById('hud');
+const P = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3();
+const v3 = a => a.map(v => v.toFixed(3).padStart(7)).join(' ');
+const clock = new THREE.Clock();
+function tick() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const k = c => keys.has(c) ? 1 : 0;
+  const vx = (k('w') - k('s')) * 0.6, vy = (k('a') - k('d')) * 0.6, wz = (k('q') - k('e')) * 1.5;
+  const driving = !!(vx || vy || wz);
+  if (driving) setWheelCmd(twistToWheels(vx, vy, wz));
+  else if (wasDriving) setWheelCmd(wheels.map(() => 0));
+  wasDriving = driving;
+  // a grasp point cannot be below the floor: keep targets at least 6 cm up (the lowest height used in training)
+  for (const T of targets) if (T.group.position.z < 0.06) T.group.position.z = 0.06;
+  applyLocks();
+  feasibleTick(performance.now());
+  if (live.on) liveTick(performance.now());
+  else if (play.k >= 0) {
+    const R = play.data[play.k];
+    if (play.on) {
+      play.t += dt;
+      if (play.t > R.frames.length * R.dt + 1.5) play.t = 0;      // loop after a short hold
+      const fi = Math.min(Math.floor(play.t / R.dt), R.frames.length - 1);
+      applyFrame(fi);
+      play.ui.scrub.value = fi;
+    }
+  } else driveStep(dt);
+  // arrow keys slide the selected target along the floor, relative to the current view:
+  // up = away from the camera, down = towards it, left / right = sideways
+  if (selected) {
+    const fwd = k('arrowup') - k('arrowdown'), side = k('arrowright') - k('arrowleft'), up = k('pageup') - k('pagedown');
+    if (fwd || side || up) {
+      const sp = (keys.has('shift') ? 0.9 : 0.3) * dt;
+      const f = new THREE.Vector3(); camera.getWorldDirection(f); f.z = 0;
+      if (f.lengthSq() < 1e-6) f.set(1, 0, 0);
+      f.normalize();
+      const rgt = new THREE.Vector3(f.y, -f.x, 0);
+      selected.group.position.addScaledVector(f, fwd * sp).addScaledVector(rgt, side * sp);
+      selected.group.position.z += up * sp;
+    }
+  }
+  const lift = joints.joint5;
+  if (lift && (k('r') || k('f'))) setJoint('joint5', lift.value + (k('r') - k('f')) * 0.15 * dt);
+  if (anim) {
+    animT += dt;
+    movable().forEach((J, i) => {
+      if (J.mate && J.name > J.mate) return;
+      const mid = (J.lower + J.upper) / 2, amp = (J.upper - J.lower) / 2;
+      const span = J.type === 'prismatic' ? 1 : 0.35;      // keep arm sweeps moderate
+      const blend = Math.min(animT / 1.5, 1);              // ease in from the current pose
+      const target = (J.type === 'prismatic' ? mid : 0) + amp * span * Math.sin(animT * (0.5 + 0.07 * i) + i);
+      const v = animFrom[J.name] + (target - animFrom[J.name]) * blend;
+      setJoint(J.name, v); if (J.mate) setJoint(J.mate, v);
+    });
+  }
+  controls.update();
+  sun.target.position.set(base.x, base.y, 0.4);
+  sun.position.copy(sun.target.position).add(SUN_OFFSET);
+  renderer.render(scene, camera);
+  let t = `base   x ${base.x.toFixed(3)}  y ${base.y.toFixed(3)}  yaw ${(base.yaw * 180 / Math.PI).toFixed(1)}°   v [${drive.v.map(v => v.toFixed(2).padStart(6)).join(' ')}]\nwheel  ω [${drive.w.map(v => v.toFixed(1).padStart(6)).join(' ')}] rad/s   τ [${drive.tau.map(v => v.toFixed(1).padStart(5)).join(' ')}] N·m\n`;
+  if (lift) t += `lift   ${(lift.value * 1000).toFixed(0)} mm\n`;
+  for (const f of eeFrames) {
+    f.tcp.matrixWorld.decompose(P, Q, S);
+    t += `${f.label}  p [${P.toArray().map(v => v.toFixed(3).padStart(7)).join(' ')}]  q(xyzw) [${Q.toArray().map(v => v.toFixed(3).padStart(6)).join(' ')}]\n`;
+  }
+  targets.forEach((T, i) => {
+    const tp = T.group.position, tq = T.group.quaternion;
+    t += `${T.label} p [${v3(tp.toArray())}]  q(xyzw) [${tq.toArray().map(v => v.toFixed(3).padStart(6)).join(' ')}]`;
+    const f = eeFrames[i];
+    if (f) {
+      f.tcp.matrixWorld.decompose(P, Q, S);
+      t += `  err ${(P.distanceTo(tp) * 1000).toFixed(0).padStart(4)} mm ${(Q.angleTo(tq) * 180 / Math.PI).toFixed(0).padStart(3)}°`;
+    }
+    t += '\n';
+  });
+  hud.textContent = t.trimEnd();
+  requestAnimationFrame(tick);
+}
+
+// ---------- boot ----------
+const statusEl = document.getElementById('status');
+try {
+  const rootLink = await loadURDF();
+  // wheels: continuous joints attached to the root link
+  for (const J of rootLink.childJoints.filter(j => j.type === 'continuous')) {
+    const a = J.axis.clone().applyQuaternion(J.origin.quaternion);       // spin axis in base frame
+    const I = J.child.inertia, m = J.child.mass;
+    const r = J.child.wheelRadius ?? Math.sqrt(2 * (I[0] * J.axis.x ** 2 + I[1] * J.axis.y ** 2 + I[2] * J.axis.z ** 2) / m);
+    const p = J.origin.position.clone(), t = new THREE.Vector3(0, 0, 1).cross(a).normalize();
+    wheels.push({ J, p, r, t, Iw: m * r * r / 2, row: [t.x, t.y, p.x * t.y - p.y * t.x] });
+  }
+  groundZ = wheels.length ? Math.max(...wheels.map(w => w.r - w.p.z)) : 0;
+  // gripper frames = links that carry the two fingers
+  for (const L of Object.values(links)) {
+    if (L.childJoints.filter(j => j.type === 'prismatic' && j.child.childJoints.length === 0).length === 2) {
+      // Grasp point (TCP): 0.13 m ahead of the gripper link, between the finger pads. This is the frame the
+      // policy drives onto the target, drawn in the same red/green/blue style so the two can be compared.
+      const tcp = new THREE.Group();
+      tcp.position.set(0.13, 0, 0);
+      L.group.add(tcp);
+      const axes = new THREE.Group();
+      [0xff4d4d, 0x4dd964, 0x4d8dff].forEach((c, i) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.11, 10), new THREE.MeshBasicMaterial({ color: c }));
+        const d = new THREE.Vector3().setComponent(i, 1);
+        m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d);
+        m.position.copy(d).multiplyScalar(0.055);
+        axes.add(m);
+      });
+      tcp.add(axes);
+      eeFrames.push({ link: L, tcp, axes, label: L.name.startsWith('left') ? 'L grip' : L.name.startsWith('right') ? 'R grip' : L.name });
+    }
+  }
+  buildUI();
+  resetAll();
+  captureRest();
+  await buildPlaybackUI();
+  await buildLiveUI();
+  applyQuality();
+  resetAll();
+  const nJ = Object.values(joints).filter(j => j.type !== 'fixed').length;
+  const sArgs = [meshOk, meshTotal, Object.keys(links).length, nJ, (wheels[0]?.r * 1000 || 0).toFixed(0), PKG];
+  setStatus(meshOk === meshTotal ? 'st_ok' : 'st_missing', sArgs, meshOk !== meshTotal);
+  window.__viewer = { selectJoint, drive, setWheelCmd, twistToWheels, massProps, targets, selectTarget, gizmo, joints, links, base, setJoint, setBase, wheels };
+  if (location.hash === '#demo') { document.getElementById('bRandom').click(); setBase(0.5, 0.3, 0.6); document.getElementById('cAxes').click(); selectJoint('left_joint13', true); targets[1].group.position.set(0.9, -0.2, 0.5); targets[1].group.rotation.set(0.6, 0.4, 1.0); }
+  if (location.hash.startsWith('#play') && play.data) { loadRollout(+location.hash.slice(5) || 0); play.t = +(location.hash.split('@')[1] ?? 0); }
+  if (location.hash.includes('lockL')) setLock(0, true);
+  if (location.hash.startsWith('#live') && live.ok) live.ui.start.click();
+  if (location.hash.startsWith('#drive')) setWheelCmd(twistToWheels(...location.hash.slice(7).split(',').map(Number)));
+  tick();
+} catch (err) {
+  setStatus('st_fail', [String(err)], true);
+  console.error(err);
+}
+</script>
+</body>
+</html>

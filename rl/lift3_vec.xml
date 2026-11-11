@@ -1,0 +1,215 @@
+<mujoco model="LIFT3">
+  <compiler angle="radian" balanceinertia="true"/>
+  <option timestep="0.005" integrator="implicitfast"/>
+  <default>
+    <geom rgba="0.6 0.62 0.66 1" friction="0.8 0.01 0.001"/>
+  </default>
+  <worldbody>
+    <light pos="0 0 3" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="0 0 0.05" contype="4" conaffinity="0" rgba="0.3 0.32 0.36 1"/>
+    <body name="base_link" pos="0 0 0.045">
+      <joint name="base_x" type="slide" axis="1 0 0" armature="0.5"/>
+      <joint name="base_y" type="slide" axis="0 1 0" armature="0.5"/>
+      <joint name="base_yaw" type="hinge" axis="0 0 1" armature="0.06"/>
+      <site name="base_site" pos="0 0 0" size="0.01"/>
+      <inertial pos="-0.00723595345007452 9.8622162146289E-06 0.100000590812141" mass="21.9398786763463" fullinertia="0.38093459 0.45902111 0.49682621 -0.00001749 0.00344648 0.00001946"/>
+      <geom name="base_link_c0" type="box" size="0.273 0.233 0.08" pos="0 0 0.071" contype="4" conaffinity="0"/>
+      <geom name="base_link_c1" type="box" size="0.059 0.059 0.1485" pos="-0.014 0 0.2315" contype="4" conaffinity="0"/>
+      <body name="wheel1" pos="0.1952 0.1552 0.03" euler="0 0 0.7854">
+        <inertial pos="0.0297999945162294 -8.44823830142838E-07 -3.14334003792549E-06" mass="0.497245842315397" fullinertia="0.00141273 0.00079395 0.00079388 0.00000000 0.00000000 -0.00000002"/>
+        <geom type="cylinder" size="0.075 0.0235" pos="0.03 0 0" euler="0 1.5708 0" contype="0" conaffinity="0" rgba="0.1 0.1 0.1 1"/>
+      </body>
+      <body name="wheel2" pos="0.1952 -0.1552 0.03" euler="0 0 -0.7854">
+        <inertial pos="0.0297999987925563 -8.4015135198845E-07 -3.14521042177329E-06" mass="0.497245807865623" fullinertia="0.00141273 0.00079395 0.00079388 0.00000000 0.00000000 -0.00000002"/>
+        <geom type="cylinder" size="0.075 0.0235" pos="0.03 0 0" euler="0 1.5708 0" contype="0" conaffinity="0" rgba="0.1 0.1 0.1 1"/>
+      </body>
+      <body name="wheel3" pos="-0.1952 -0.1552 0.03" euler="0 0 -2.3562">
+        <inertial pos="0.0297999945038742 -8.439503120794E-07 -3.14324896588669E-06" mass="0.497245859023115" fullinertia="0.00141273 0.00079395 0.00079388 0.00000000 0.00000000 -0.00000002"/>
+        <geom type="cylinder" size="0.075 0.0235" pos="0.03 0 0" euler="0 1.5708 0" contype="0" conaffinity="0" rgba="0.1 0.1 0.1 1"/>
+      </body>
+      <body name="wheel4" pos="-0.1952 0.1552 0.03" euler="0 0 2.3562">
+        <inertial pos="0.0297999945268945 -8.44817010681176E-07 -3.14314107474623E-06" mass="0.497245844623947" fullinertia="0.00141273 0.00079395 0.00079388 0.00000000 0.00000000 -0.00000002"/>
+        <geom type="cylinder" size="0.075 0.0235" pos="0.03 0 0" euler="0 1.5708 0" contype="0" conaffinity="0" rgba="0.1 0.1 0.1 1"/>
+      </body>
+      <body name="body5" pos="-0.01437 0 0.3915" euler="0 0 0">
+        <joint name="joint5" type="slide" axis="0 0 1" range="0 0.38" armature="2" damping="50"/>
+        <inertial pos="0.00634197738868791 2.47110688189611E-07 0.0340062616699561" mass="7.3075810264343" fullinertia="0.20854510 0.10956672 0.11907417 0.00000030 -0.00714197 -0.00000389"/>
+        <geom name="body5_c0" type="box" size="0.072 0.072 0.154" pos="0 0 -0.154" contype="4" conaffinity="0"/>
+        <geom name="body5_c1" type="box" size="0.058 0.26 0.057" pos="0.008 0 0.057" contype="4" conaffinity="0"/>
+        <geom name="body5_c2" type="capsule" size="0.013" fromto="0.041 0 0.12 0.041 0 0.59" contype="4" conaffinity="0"/>
+        <geom name="body5_c3" type="box" size="0.0505 0.025 0.0415" pos="0.0735 0 0.6315" contype="4" conaffinity="0"/>
+        <body name="left_link11" pos="0.0085 0.2 0.1125" euler="0 0 0">
+          <joint name="left_joint11" type="hinge" axis="0 0 1" range="-1.57 1.57" armature="0.03" damping="0.2" frictionloss="0.15"/>
+          <inertial pos="0.00457902288318537 -0.0043030834568763 0.0156181246472304" mass="0.0878504534026056" fullinertia="0.00009996 0.00004000 0.00009523 0.00000084 -0.00001100 0.00000238"/>
+          <body name="left_link12" pos="0.02 0 0.04" euler="0 0 0">
+            <joint name="left_joint12" type="hinge" axis="0 1 0" range="0 3.6" armature="0.03" damping="0.2" frictionloss="0.15"/>
+            <inertial pos="-0.132587152738995 -0.00500012843229072 3.57710084555318E-05" mass="0.943292722252087" fullinertia="0.00045075 0.01517997 0.01521078 -0.00001476 0.00001704 -0.00000072"/>
+            <geom name="left_link12_c0" type="capsule" size="0.028" fromto="0 0 0 -0.264 0 0" contype="1" conaffinity="7"/>
+            <site name="touch_left_link12" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+            <body name="left_link13" pos="-0.264 0 0" euler="0 0 0">
+              <joint name="left_joint13" type="hinge" axis="0 -1 0" range="0 3.0" armature="0.03" damping="0.2" frictionloss="0.15"/>
+              <inertial pos="0.179000203315409 -0.000894648828288797 0.051116916029498" mass="0.63106019680517" fullinertia="0.00046499 0.00502321 0.00497247 -0.00010182 -0.00051676 -0.00002550"/>
+              <geom name="left_link13_c0" type="capsule" size="0.028" fromto="0.03 0 0.01 0.245 0 0.056" contype="1" conaffinity="7"/>
+              <site name="touch_left_link13" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+              <body name="left_link14" pos="0.24503 0 0.05588" euler="0 0 0">
+                <joint name="left_joint14" type="hinge" axis="0 -1 0" range="-1.29 1.29" armature="0.006" damping="0.05" frictionloss="0.05"/>
+                <inertial pos="0.0405135566733644 -0.00433039283077064 0.0535177214923492" mass="0.166156507378479" fullinertia="0.00022196 0.00026792 0.00021007 -0.00001947 -0.00009615 -0.00002352"/>
+                <geom name="left_link14_c0" type="capsule" size="0.025" fromto="0 0 0 0.068 0 0.0845" contype="1" conaffinity="7"/>
+                <site name="touch_left_link14" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                <body name="left_link15" pos="0.06775 -0.0005 0.0845" euler="0 0 0">
+                  <joint name="left_joint15" type="hinge" axis="0 0 -1" range="-1.48 1.48" armature="0.006" damping="0.05" frictionloss="0.05"/>
+                  <inertial pos="0.00295041040995979 5.80443677558606E-06 -0.0545671743529674" mass="0.69695248150675" fullinertia="0.00094767 0.00093613 0.00029130 -0.00000046 0.00005003 -0.00000023"/>
+                  <geom name="left_link15_c0" type="capsule" size="0.028" fromto="0 0 -0.02 0 0 -0.1" contype="1" conaffinity="7"/>
+                  <site name="touch_left_link15" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                  <body name="left_link16" pos="0.02895 0 -0.0845" euler="0 0 0">
+                    <joint name="left_joint16" type="hinge" axis="1 0 0" range="-1.74 1.74" armature="0.006" damping="0.05" frictionloss="0.05"/>
+                    <inertial pos="0.0415542928923711 2.37830145945472E-05 0.000141165570865853" mass="0.451727235509068" fullinertia="0.00037961 0.00028316 0.00050542 0.00000018 -0.00000422 0.00000165"/>
+                    <geom name="left_link16_c0" type="box" size="0.035 0.08 0.028" pos="0.049 0 0" contype="1" conaffinity="7"/>
+                    <site name="touch_left_link16" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                    <site name="tcp_l" pos="0.13 0 0" size="0.012" rgba="1 0.6 0 1"/>
+                    <body name="left_link17" pos="0.08657 0.024896 -0.0002436" euler="0 0 0">
+                      <joint name="left_joint17" type="slide" axis="0 1 0" range="0 0.044" armature="0.1" damping="5"/>
+                      <inertial pos="-0.0003552225921317 -0.00782703850949985 -0.00298831676915334" mass="0.0647981743053202" fullinertia="0.00002362 0.00003030 0.00003182 0.00000354 -0.00000141 -0.00000139"/>
+                      <geom name="left_link17_c0" type="box" size="0.026 0.006 0.028" pos="0.045 0.006 0" contype="1" conaffinity="7"/>
+                      <site name="touch_left_link17" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                    </body>
+                    <body name="left_link18" pos="0.08657 -0.0249 -0.00024366" euler="0 0 0">
+                      <joint name="left_joint18" type="slide" axis="0 -1 0" range="0 0.044" armature="0.1" damping="5"/>
+                      <inertial pos="-0.000355223470266779 0.007827687410604 0.00242005652832411" mass="0.0647981725781686" fullinertia="0.00002396 0.00003063 0.00003182 -0.00000354 0.00000342 -0.00000072"/>
+                      <geom name="left_link18_c0" type="box" size="0.026 0.006 0.028" pos="0.045 -0.006 0" contype="1" conaffinity="7"/>
+                      <site name="touch_left_link18" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="right_link21" pos="0.0085 -0.2 0.1125" euler="0 0 0">
+          <joint name="right_joint21" type="hinge" axis="0 0 1" range="-1.57 1.57" armature="0.03" damping="0.2" frictionloss="0.15"/>
+          <inertial pos="0.00457902288318479 -0.00430308345687624 0.0156181246472302" mass="0.0878504534026108" fullinertia="0.00009996 0.00004000 0.00009523 0.00000084 -0.00001100 0.00000238"/>
+          <body name="right_link22" pos="0.02 0 0.04" euler="0 0 0">
+            <joint name="right_joint22" type="hinge" axis="0 1 0" range="0 3.6" armature="0.03" damping="0.2" frictionloss="0.15"/>
+            <inertial pos="-0.132587152739181 -0.0050001284311908 3.57710095038044E-05" mass="0.943292722183826" fullinertia="0.00045075 0.01517997 0.01521078 -0.00001476 0.00001704 -0.00000072"/>
+            <geom name="right_link22_c0" type="capsule" size="0.028" fromto="0 0 0 -0.264 0 0" contype="2" conaffinity="7"/>
+            <site name="touch_right_link22" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+            <body name="right_link23" pos="-0.264 0 0" euler="0 0 0">
+              <joint name="right_joint23" type="hinge" axis="0 -1 0" range="0 3.0" armature="0.03" damping="0.2" frictionloss="0.15"/>
+              <inertial pos="0.179000203364505 -0.000894648816755605 0.051116916030292" mass="0.631060196527244" fullinertia="0.00046499 0.00502321 0.00497247 -0.00010182 -0.00051676 -0.00002550"/>
+              <geom name="right_link23_c0" type="capsule" size="0.028" fromto="0.03 0 0.01 0.245 0 0.056" contype="2" conaffinity="7"/>
+              <site name="touch_right_link23" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+              <body name="right_link24" pos="0.24503 0 0.05588" euler="0 0 0">
+                <joint name="right_joint24" type="hinge" axis="0 -1 0" range="-1.29 1.29" armature="0.006" damping="0.05" frictionloss="0.05"/>
+                <inertial pos="0.0405135566733642 -0.00433039283077075 0.053517721492349" mass="0.16615650737848" fullinertia="0.00022196 0.00026792 0.00021007 -0.00001947 -0.00009615 -0.00002352"/>
+                <geom name="right_link24_c0" type="capsule" size="0.025" fromto="0 0 0 0.068 0 0.0845" contype="2" conaffinity="7"/>
+                <site name="touch_right_link24" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                <body name="right_link25" pos="0.06775 -0.0005 0.0845" euler="0 0 0">
+                  <joint name="right_joint25" type="hinge" axis="0 0 -1" range="-1.48 1.48" armature="0.006" damping="0.05" frictionloss="0.05"/>
+                  <inertial pos="0.00288983158630945 -8.7675335151971E-06 -0.054550604361751" mass="0.695378955274006" fullinertia="0.00094767 0.00093613 0.00029130 -0.00000046 0.00005003 -0.00000023"/>
+                  <geom name="right_link25_c0" type="capsule" size="0.028" fromto="0 0 -0.02 0 0 -0.1" contype="2" conaffinity="7"/>
+                  <site name="touch_right_link25" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                  <body name="right_link26" pos="0.02895 0 -0.0845" euler="0 0 0">
+                    <joint name="right_joint26" type="hinge" axis="1 0 0" range="-1.74 1.74" armature="0.006" damping="0.05" frictionloss="0.05"/>
+                    <inertial pos="0.0415542928891813 2.37830163201114E-05 0.000141165567508983" mass="0.451727235471094" fullinertia="0.00037961 0.00028316 0.00050542 0.00000018 -0.00000422 0.00000165"/>
+                    <geom name="right_link26_c0" type="box" size="0.035 0.08 0.028" pos="0.049 0 0" contype="2" conaffinity="7"/>
+                    <site name="touch_right_link26" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                    <site name="tcp_r" pos="0.13 0 0" size="0.012" rgba="1 0.6 0 1"/>
+                    <body name="right_link27" pos="0.08657 0.024896 -0.0002436" euler="0 0 0">
+                      <joint name="right_joint27" type="slide" axis="0 1 0" range="0 0.044" armature="0.1" damping="5"/>
+                      <inertial pos="-0.0003552225921317 -0.00782703850949984 -0.0029883167691529" mass="0.0647981743053201" fullinertia="0.00002362 0.00003030 0.00003182 0.00000354 -0.00000141 -0.00000139"/>
+                      <geom name="right_link27_c0" type="box" size="0.026 0.006 0.028" pos="0.045 0.006 0" contype="2" conaffinity="7"/>
+                      <site name="touch_right_link27" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                    </body>
+                    <body name="right_link28" pos="0.08657 -0.0249 -0.00024366" euler="0 0 0">
+                      <joint name="right_joint28" type="slide" axis="0 -1 0" range="0 0.044" armature="0.1" damping="5"/>
+                      <inertial pos="-0.000355223470266793 0.00782768741060402 0.00242005652832455" mass="0.0647981725781686" fullinertia="0.00002396 0.00003063 0.00003182 -0.00000354 0.00000342 -0.00000072"/>
+                      <geom name="right_link28_c0" type="box" size="0.026 0.006 0.028" pos="0.045 -0.006 0" contype="2" conaffinity="7"/>
+                      <site name="touch_right_link28" type="box" size="0.4 0.4 0.4" group="4" rgba="0 0 0 0"/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <contact>
+    <exclude body1="left_link12" body2="left_link14"/>
+    <exclude body1="left_link13" body2="left_link15"/>
+    <exclude body1="left_link14" body2="left_link16"/>
+    <exclude body1="left_link14" body2="left_link17"/>
+    <exclude body1="left_link14" body2="left_link18"/>
+    <exclude body1="left_link15" body2="left_link17"/>
+    <exclude body1="left_link15" body2="left_link18"/>
+    <exclude body1="left_link17" body2="left_link18"/>
+    <exclude body1="right_link22" body2="right_link24"/>
+    <exclude body1="right_link23" body2="right_link25"/>
+    <exclude body1="right_link24" body2="right_link26"/>
+    <exclude body1="right_link24" body2="right_link27"/>
+    <exclude body1="right_link24" body2="right_link28"/>
+    <exclude body1="right_link25" body2="right_link27"/>
+    <exclude body1="right_link25" body2="right_link28"/>
+    <exclude body1="right_link27" body2="right_link28"/>
+  </contact>
+  <actuator>
+    <position name="joint5" joint="joint5" kp="50000" kv="1500" forcerange="-400.0 400.0" ctrlrange="0 0.38"/>
+    <position name="left_joint11" joint="left_joint11" kp="120.0" kv="6.0" forcerange="-27.0 27.0" ctrlrange="-1.57 1.57"/>
+    <position name="left_joint12" joint="left_joint12" kp="120.0" kv="6.0" forcerange="-27.0 27.0" ctrlrange="0 3.6"/>
+    <position name="left_joint13" joint="left_joint13" kp="120.0" kv="6.0" forcerange="-27.0 27.0" ctrlrange="0 3.0"/>
+    <position name="left_joint14" joint="left_joint14" kp="40.0" kv="2.0" forcerange="-7.0 7.0" ctrlrange="-1.29 1.29"/>
+    <position name="left_joint15" joint="left_joint15" kp="40.0" kv="2.0" forcerange="-7.0 7.0" ctrlrange="-1.48 1.48"/>
+    <position name="left_joint16" joint="left_joint16" kp="40.0" kv="2.0" forcerange="-7.0 7.0" ctrlrange="-1.74 1.74"/>
+    <position name="left_joint17" joint="left_joint17" kp="500" kv="20" forcerange="-100 100" ctrlrange="0 0.044"/>
+    <position name="left_joint18" joint="left_joint18" kp="500" kv="20" forcerange="-100 100" ctrlrange="0 0.044"/>
+    <position name="right_joint21" joint="right_joint21" kp="120.0" kv="6.0" forcerange="-27.0 27.0" ctrlrange="-1.57 1.57"/>
+    <position name="right_joint22" joint="right_joint22" kp="120.0" kv="6.0" forcerange="-27.0 27.0" ctrlrange="0 3.6"/>
+    <position name="right_joint23" joint="right_joint23" kp="120.0" kv="6.0" forcerange="-27.0 27.0" ctrlrange="0 3.0"/>
+    <position name="right_joint24" joint="right_joint24" kp="40.0" kv="2.0" forcerange="-7.0 7.0" ctrlrange="-1.29 1.29"/>
+    <position name="right_joint25" joint="right_joint25" kp="40.0" kv="2.0" forcerange="-7.0 7.0" ctrlrange="-1.48 1.48"/>
+    <position name="right_joint26" joint="right_joint26" kp="40.0" kv="2.0" forcerange="-7.0 7.0" ctrlrange="-1.74 1.74"/>
+    <position name="right_joint27" joint="right_joint27" kp="500" kv="20" forcerange="-100 100" ctrlrange="0 0.044"/>
+    <position name="right_joint28" joint="right_joint28" kp="500" kv="20" forcerange="-100 100" ctrlrange="0 0.044"/>
+    <velocity name="wheel1" site="base_site" gear="9.428108 -9.428073 0.000000 0.000000 0.000000 -3.303602" kv="2" forcerange="-7 7" ctrlrange="-20 20"/>
+    <velocity name="wheel2" site="base_site" gear="-9.428108 -9.428073 0.000000 0.000000 0.000000 -3.303602" kv="2" forcerange="-7 7" ctrlrange="-20 20"/>
+    <velocity name="wheel3" site="base_site" gear="-9.428038 9.428142 0.000000 0.000000 0.000000 -3.303605" kv="2" forcerange="-7 7" ctrlrange="-20 20"/>
+    <velocity name="wheel4" site="base_site" gear="9.428038 9.428142 0.000000 0.000000 0.000000 -3.303605" kv="2" forcerange="-7 7" ctrlrange="-20 20"/>
+  </actuator>
+  <sensor>
+    <touch name="touch_left_link12" site="touch_left_link12"/>
+    <touch name="touch_left_link13" site="touch_left_link13"/>
+    <touch name="touch_left_link14" site="touch_left_link14"/>
+    <touch name="touch_left_link15" site="touch_left_link15"/>
+    <touch name="touch_left_link16" site="touch_left_link16"/>
+    <touch name="touch_left_link17" site="touch_left_link17"/>
+    <touch name="touch_left_link18" site="touch_left_link18"/>
+    <touch name="touch_right_link22" site="touch_right_link22"/>
+    <touch name="touch_right_link23" site="touch_right_link23"/>
+    <touch name="touch_right_link24" site="touch_right_link24"/>
+    <touch name="touch_right_link25" site="touch_right_link25"/>
+    <touch name="touch_right_link26" site="touch_right_link26"/>
+    <touch name="touch_right_link27" site="touch_right_link27"/>
+    <touch name="touch_right_link28" site="touch_right_link28"/>
+    <actuatorfrc name="frc_left_joint11" actuator="left_joint11"/>
+    <actuatorfrc name="frc_left_joint12" actuator="left_joint12"/>
+    <actuatorfrc name="frc_left_joint13" actuator="left_joint13"/>
+    <actuatorfrc name="frc_left_joint14" actuator="left_joint14"/>
+    <actuatorfrc name="frc_left_joint15" actuator="left_joint15"/>
+    <actuatorfrc name="frc_left_joint16" actuator="left_joint16"/>
+    <actuatorfrc name="frc_right_joint21" actuator="right_joint21"/>
+    <actuatorfrc name="frc_right_joint22" actuator="right_joint22"/>
+    <actuatorfrc name="frc_right_joint23" actuator="right_joint23"/>
+    <actuatorfrc name="frc_right_joint24" actuator="right_joint24"/>
+    <actuatorfrc name="frc_right_joint25" actuator="right_joint25"/>
+    <actuatorfrc name="frc_right_joint26" actuator="right_joint26"/>
+    <actuatorfrc name="frc_wheel1" actuator="wheel1"/>
+    <actuatorfrc name="frc_wheel2" actuator="wheel2"/>
+    <actuatorfrc name="frc_wheel3" actuator="wheel3"/>
+    <actuatorfrc name="frc_wheel4" actuator="wheel4"/>
+    <framepos name="tcp_l_pos" objtype="site" objname="tcp_l"/>
+    <framequat name="tcp_l_quat" objtype="site" objname="tcp_l"/>
+    <framepos name="tcp_r_pos" objtype="site" objname="tcp_r"/>
+    <framequat name="tcp_r_quat" objtype="site" objname="tcp_r"/>
+  </sensor>
+</mujoco>
